@@ -8,18 +8,19 @@ import (
 	"io"
 	"log"
 	"os"
+
+	"github.com/google/uuid"
+	"golang.org/x/exp/maps"
 )
 
-var expressions = map[string][]mdl.Expression{
-	"Expressions": {
-		{Uuid: "1", Status: "Ready", Value: "2+2*2", Result: "6"},
-		{Uuid: "2", Status: "Calculating", Value: "2+2*2", Result: "?"},
-		{Uuid: "3", Status: "Error", Value: "2+2*2", Result: "error"},
-	},
+var exprs = map[string]mdl.Expression{
+	"1a8dbfc9-d089-4544-a2e9-8093c9012fd9": {Uuid: "1a8dbfc9-d089-4544-a2e9-8093c9012fd9", Status: "Ready", Value: "2+2*2", Result: "6"},
+	"d4295216-be86-409f-b0d8-4be26301fa15": {Uuid: "d4295216-be86-409f-b0d8-4be26301fa15", Status: "Calculating", Value: "2+2*2", Result: "?"},
+	"c7c41838-f305-41e4-8fff-d10c56e48d92": {Uuid: "c7c41838-f305-41e4-8fff-d10c56e48d92", Status: "Error", Value: "2+2*2", Result: "error"},
 }
 
 func InitExpressions() {
-	es := []mdl.Expression{}
+	exs := map[string]mdl.Expression{}
 
 	jsonFile, err := os.Open("expressions.json")
 	if err != nil {
@@ -36,29 +37,36 @@ func InitExpressions() {
 		return
 	}
 
-	err = json.Unmarshal(byteValue, &es)
+	err = json.Unmarshal(byteValue, &exs)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println(es)
-	expressions["Expressions"] = es
+	fmt.Println(exs)
+	exprs = exs
 }
 
 func GetExpressions() map[string][]mdl.Expression {
-	return expressions
+	es := maps.Values(exprs)
+	r := map[string][]mdl.Expression{
+		"Expressions": es,
+	}
+	return r
 }
 
-func SaveExpressions(e mdl.Expression) {
-	es := expressions["Expressions"]
-	es = append(es, e)
-	expressions["Expressions"] = es
+func SaveExpressions(e mdl.Expression) mdl.Expression {
+	id := uuid.New().String()
+	e.Uuid = id
 
-	n, err := WriteDataToFileAsJSON(expressions["Expressions"], "expressions.json")
+	exprs[id] = e
+
+	bn, err := WriteDataToFileAsJSON(exprs, "expressions.json")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("DC printed ", n, " bytes to ", "expressions.json")
+	fmt.Println("DC printed ", bn, " bytes to ", "expressions.json")
+
+	return e
 }
 
 func WriteDataToFileAsJSON(data interface{}, filedir string) (int, error) {

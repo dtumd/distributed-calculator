@@ -3,21 +3,10 @@ package main
 import (
 	db "distr-calc/db"
 	h "distr-calc/handler"
-	"distr-calc/parse"
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 )
-
-// solve
-func Solve(s string) float64 {
-	p := parse.NewParser(strings.NewReader(s))
-	stack, _ := p.Parse()
-	stack = parse.ShuntingYard(stack)
-	answer := parse.SolvePostfix(stack)
-	return answer
-}
 
 func main() {
 	fmt.Println("Distributed Calculator app...")
