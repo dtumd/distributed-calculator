@@ -1,9 +1,9 @@
 package handler
 
 import (
-	o "distr-calc/orchestrator"
 	"net/http"
 	"text/template"
+	o "yc/distr-calc/orchestrator"
 )
 
 // resources handler - returns the resources.html template, with film data

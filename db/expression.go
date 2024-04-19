@@ -1,100 +1,179 @@
 package db
 
 import (
-	"bytes"
-	mdl "distr-calc/model"
-	"encoding/json"
+	"context"
+	"database/sql"
 	"fmt"
-	"io"
-	"log"
-	"os"
+	mdl "yc/distr-calc/model"
 
 	"github.com/google/uuid"
-	"golang.org/x/exp/maps"
 )
 
-var exprs = map[string]mdl.Expression{
-	"1a8dbfc9-d089-4544-a2e9-8093c9012fd9": {Uuid: "1a8dbfc9-d089-4544-a2e9-8093c9012fd9", Status: "Ready", Value: "2+2*2", Result: "6"},
-	//"d4295216-be86-409f-b0d8-4be26301fa15": {Uuid: "d4295216-be86-409f-b0d8-4be26301fa15", Status: "Calculating", Value: "2+2*2", Result: "?"},
-	"c7c41838-f305-41e4-8fff-d10c56e48d92": {Uuid: "c7c41838-f305-41e4-8fff-d10c56e48d92", Status: "Error", Value: "2+2*2", Result: "error"},
+func CreateExpressionsTable(ctx context.Context, db *sql.DB) error {
+
+	const expressionsTable = `
+	CREATE TABLE IF NOT EXISTS expressions(
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		uuid TEXT NOT NULL,
+		value TEXT NOT NULL,
+		status TEXT NOT NULL,
+		result TEXT NOT NULL,
+		user_id INTEGER NOT NULL,
+
+		FOREIGN KEY(user_id) REFERENCES users (id)
+	);`
+
+	if _, err := db.ExecContext(ctx, expressionsTable); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func InitExpressions() {
-	exs := map[string]mdl.Expression{}
+func InsertExpression(ctx context.Context, tx *sql.Tx, expr *mdl.Expression) (int64, error) {
+	var q = `
+	INSERT INTO expressions (uuid, value, status, result, user_id) values ($1, $2, $3, $4, $5)
+	`
 
-	jsonFile, err := os.Open("expressions.json")
+	result, err := tx.ExecContext(ctx, q, expr.Uuid, expr.Value, expr.Status, expr.Result, expr.UserID)
 	if err != nil {
-		fmt.Printf("Open file error: %s\n", err)
-		return
+		return 0, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
 	}
 
-	fmt.Println("Successfully Opened expressions.json")
-	defer jsonFile.Close()
+	return id, nil
+}
 
-	byteValue, err := io.ReadAll(jsonFile)
+func SelectExpressions(ctx context.Context, db *sql.DB) ([]mdl.Expression, error) {
+	var expressions []mdl.Expression
+	var q = "SELECT id, uuid, value, status, result, user_id FROM expressions"
+
+	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
-		fmt.Printf("ReadAll error: %s\n", err)
-		return
+		return nil, err
+	}
+	defer rows.Close()
+
+	id := 0
+
+	for rows.Next() {
+		e := mdl.Expression{}
+		err := rows.Scan(&id, &e.Uuid, &e.Value, &e.Status, &e.Result, &e.UserID)
+		if err != nil {
+			return nil, err
+		}
+		expressions = append(expressions, e)
 	}
 
-	err = json.Unmarshal(byteValue, &exs)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println(exs)
-	exprs = exs
+	return expressions, nil
 }
 
 func UpdateExpression(expr mdl.Expression) {
-	save(expr)
+	//save(expr)
+
+	ctx := context.TODO()
+
+	db, err := sql.Open("sqlite3", "dc.db")
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	err = db.PingContext(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	var q = `
+	UPDATE expressions SET status=$1, result=$2 WHERE uuid=$3
+	`
+	_, err = tx.ExecContext(ctx, q, expr.Status, expr.Result, expr.Uuid)
+	if err != nil {
+		//	return err
+		fmt.Print(err)
+	}
+
+	tx.Commit()
+
+	//return nil
 }
 
 func GetExpressions() map[string][]mdl.Expression {
-	es := maps.Values(exprs)
-	r := map[string][]mdl.Expression{
-		"Expressions": es,
+	//es := maps.Values(exprs)
+
+	ctx := context.TODO()
+
+	db, err := sql.Open("sqlite3", "dc.db")
+	if err != nil {
+		panic(err)
 	}
+	defer db.Close()
+
+	err = db.PingContext(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	exps, err := SelectExpressions(ctx, db)
+	if err != nil {
+		//	return err
+		fmt.Print(err)
+	}
+
+	r := map[string][]mdl.Expression{
+		"Expressions": exps,
+	}
+
 	return r
 }
 
-func SaveExpressions(value string, status string, result string) mdl.Expression {
+func SaveExpression(value string, status string, result string, login string) mdl.Expression {
+	fmt.Println("SaveExpression, user login: " + login)
+
 	id := uuid.New().String()
 
-	expression := mdl.Expression{Uuid: id, Status: status, Value: value, Result: result}
+	ctx := context.TODO()
 
-	save(expression)
+	db, err := sql.Open("sqlite3", "dc.db")
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	err = db.PingContext(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	user, err := SelectUser(ctx, db, login)
+	if err != nil {
+		panic(err)
+	}
+
+	expression := mdl.Expression{Uuid: id, Status: status, Value: value, Result: result, UserID: user.ID}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	expressionID, err := InsertExpression(ctx, tx, &expression)
+	if err != nil {
+		panic(err)
+	}
+
+	//expression.ID = expressionID
+	fmt.Println(expressionID)
+
+	tx.Commit()
 
 	return expression
-}
-
-func save(expr mdl.Expression) {
-	exprs[expr.Uuid] = expr
-
-	bn, err := writeDataToFileAsJSON(exprs, "expressions.json")
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("DC printed ", bn, " bytes to ", "expressions.json")
-}
-
-func writeDataToFileAsJSON(data interface{}, filedir string) (int, error) {
-	buffer := new(bytes.Buffer)
-	encoder := json.NewEncoder(buffer)
-	encoder.SetIndent("", "\t")
-
-	err := encoder.Encode(data)
-	if err != nil {
-		return 0, err
-	}
-	file, err := os.OpenFile(filedir, os.O_TRUNC|os.O_CREATE, 0755)
-	if err != nil {
-		return 0, err
-	}
-	n, err := file.Write(buffer.Bytes())
-	if err != nil {
-		return 0, err
-	}
-
-	return n, nil
 }

@@ -5,4 +5,5 @@ type Expression struct {
 	Status string
 	Value  string
 	Result string
+	UserID int64
 }

@@ -1,8 +1,8 @@
 package db
 
 import (
-	mdl "distr-calc/model"
 	"fmt"
+	mdl "yc/distr-calc/model"
 )
 
 func InitSettings() {

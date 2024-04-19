@@ -1,12 +1,15 @@
 package calculator
 
 import (
-	"distr-calc/parse"
 	"fmt"
 	"strings"
+	"time"
+	"yc/distr-calc/parse"
 )
 
 func Calculate(s string) (float64, error) {
+	time.Sleep(10 * time.Second)
+
 	p := parse.NewParser(strings.NewReader(s))
 	// fmt.Printf("%+v\n", p)
 	stack, err := p.Parse()

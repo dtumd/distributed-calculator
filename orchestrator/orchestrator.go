@@ -1,11 +1,16 @@
 package orchestrator
 
 import (
-	calc "distr-calc/calculator"
-	db "distr-calc/db"
-	mdl "distr-calc/model"
+	"context"
 	"fmt"
+	"log"
 	"time"
+	db "yc/distr-calc/db"
+	mdl "yc/distr-calc/model"
+	calcp "yc/distr-calc/proto"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 var resources = map[string][]mdl.ComputingResource{
@@ -20,8 +25,10 @@ func GetResources() map[string][]mdl.ComputingResource {
 	return resources
 }
 
-func AddExpression(expr string) mdl.Expression {
-	expression := db.SaveExpressions(expr, "Calculating", "?")
+func AddExpression(expr string, login string) mdl.Expression {
+	fmt.Println("AddExpression, user login: " + login)
+
+	expression := db.SaveExpression(expr, "Calculating", "?", login) // prepare expression
 
 	calculate(expression)
 
@@ -35,19 +42,34 @@ func Init() {
 }
 
 func calculate(expression mdl.Expression) {
+
 	go func() {
 		fmt.Println("calculate")
 
-		time.Sleep(10 * time.Second)
+		host := "localhost"
+		port := "8333"
 
-		res, err := calc.Calculate(expression.Value)
+		addr := fmt.Sprintf("%s:%s", host, port)
+
+		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+		if err != nil {
+			log.Println("could not connect to grpc server: ", err)
+		}
+
+		defer conn.Close()
+		grpcClient := calcp.NewCalculateServiceClient(conn)
+
+		res, err := grpcClient.Calculate(context.TODO(), &calcp.CalculateRequest{Expression: expression.Value})
+
 		if err != nil {
 			expression.Status = "Error"
 			expression.Result = "Error"
 		} else {
 			expression.Status = "Ready"
-			expression.Result = fmt.Sprint(res)
+			expression.Result = fmt.Sprint(res.Result)
 		}
 		db.UpdateExpression(expression)
 	}()
+
 }
