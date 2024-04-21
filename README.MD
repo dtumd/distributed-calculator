@@ -2,7 +2,9 @@
 
 Для запуска приложения запустите в корне проекта 
 
-> go run main.go
+> go run cmd/calculator/main.go
+
+> go run cmd/orchestrator/main.go
 
 В браузере перейдите по ссылке http://localhost:8000/
 
